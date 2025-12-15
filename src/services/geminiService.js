@@ -9,8 +9,9 @@ export function initializeGemini(apiKey) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
+    // Usar Gemini 2.5 Flash (modelo atual e ativo)
     return genAI.getGenerativeModel({
-        model: "gemini-2.0-flash-exp"
+        model: "gemini-2.5-flash"
     });
 }
 
@@ -40,8 +41,20 @@ export async function extractTextFromPDF(model, pdfFile) {
         const base64Data = await fileToBase64(pdfFile);
         console.log(`PDF convertido para base64, tamanho: ${base64Data.length} caracteres`);
 
-        // Prompt simplificado para teste
-        const prompt = `Extraia TODO o texto deste PDF. Preserve a estrutura original e não omita nada.`;
+        // Prompt para extração estruturada
+        const prompt = `Extraia TODO o texto deste PDF de forma estruturada e completa.
+
+IMPORTANTE: Preserve EXATAMENTE como aparecem no documento:
+- Todos os títulos e seções
+- Todas as datas e horários
+- Todas as listas e tabelas
+- TODOS os registros de frequência (cada um deles)
+- Todos os registros de conteúdo/encontros
+- Todas as resoluções e números de documentos oficiais
+- Todo o texto de avaliação e parecer final
+
+Retorne o texto completo extraído, preservando a estrutura original.
+NÃO resuma, NÃO omita nada. Extraia TUDO.`;
 
         console.log('Enviando requisição para Gemini API...');
 
@@ -67,41 +80,31 @@ export async function extractTextFromPDF(model, pdfFile) {
         console.error('ERRO DETALHADO:', {
             message: error.message,
             status: error.status,
-            statusText: error.statusText,
-            errorDetails: error
+            statusText: error.statusText
         });
-
-        // Log do erro completo para debug
-        console.error('Erro completo:', JSON.stringify(error, null, 2));
 
         // Mensagens de erro mais específicas
         if (error.message?.includes('API key') || error.message?.includes('API_KEY_INVALID')) {
             throw new Error('Chave API inválida. Verifique se copiou corretamente do Google AI Studio.');
         }
 
-        // Verificar se é realmente 429 ou outro código
         if (error.status === 429 || error.message?.includes('429')) {
-            throw new Error(`Rate limit (429): ${error.message}. Sua conta pode ter atingido o limite diário ou por minuto.`);
+            throw new Error('Limite de requisições excedido. Aguarde 1 minuto e tente novamente.');
         }
 
         if (error.status === 400) {
-            throw new Error(`Requisição inválida (400): ${error.message}. O PDF pode estar corrompido ou muito grande.`);
+            throw new Error(`Requisição inválida: O PDF pode estar corrompido ou muito grande.`);
         }
 
         if (error.status === 403) {
-            throw new Error(`Acesso negado (403): ${error.message}. Sua chave API pode não ter permissão para este modelo.`);
-        }
-
-        if (error.message?.includes('CORS') || error.message?.includes('fetch')) {
-            throw new Error('Erro de conexão com a API. Verifique sua conexão com a internet.');
+            throw new Error(`Acesso negado: Sua chave API pode não ter permissão para este modelo.`);
         }
 
         if (error.message?.includes('model not found') || error.message?.includes('404')) {
-            throw new Error('Modelo não encontrado (404). Sua chave pode não ter acesso ao gemini-2.0-flash-exp.');
+            throw new Error('Modelo não encontrado. Atualize o SDK: npm install @google/generative-ai@latest');
         }
 
-        // Erro genérico com mais detalhes
-        throw new Error(`Falha ao processar ${pdfFile.name}: [${error.status || 'UNKNOWN'}] ${error.message}`);
+        throw new Error(`Falha ao processar ${pdfFile.name}: ${error.message}`);
     }
 }
 
@@ -111,7 +114,7 @@ export async function extractTextFromPDF(model, pdfFile) {
 export async function processPDFBatch(model, pdfFiles, onProgress) {
     const results = [];
     const CONCURRENT_LIMIT = 1;
-    const DELAY_MS = 5000; // 5 segundos de delay
+    const DELAY_MS = 3000; // 3 segundos de delay
 
     for (let i = 0; i < pdfFiles.length; i += CONCURRENT_LIMIT) {
         const batch = pdfFiles.slice(i, i + CONCURRENT_LIMIT);
