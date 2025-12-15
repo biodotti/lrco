@@ -1,30 +1,20 @@
-import Groq from 'groq-sdk';
-
 /**
- * Inicializa cliente Groq com chave API
- * @param {string} apiKey - Chave API da Groq
- * @returns {Groq} Cliente Groq inicializado
+ * Inicializa cliente Groq (apenas valida a chave)
  */
 export function initializeGroq(apiKey) {
     if (!apiKey || apiKey.trim() === '') {
         throw new Error('Chave API Groq é obrigatória');
     }
-
-    return new Groq({
-        apiKey: apiKey,
-        dangerouslyAllowBrowser: true // Permite uso no navegador
-    });
+    return apiKey; // Retorna a chave para uso posterior
 }
 
 /**
- * Analisa texto extraído do PDF usando Groq
- * @param {Groq} groq - Cliente Groq
- * @param {string} extractedText - Texto extraído do PDF
- * @returns {Promise<Object>} Resultado da análise com validações
+ * Analisa texto extraído do PDF usando Groq API REST
  */
-export async function analyzeTextWithGroq(groq, extractedText) {
+export async function analyzeTextWithGroq(apiKey, extractedText) {
     try {
-        console.log('Enviando texto para análise com Groq...');
+        console.log('[Groq] Iniciando análise...');
+        console.log(`[Groq] Texto: ${extractedText.length} caracteres`);
 
         const prompt = `Você é um assistente especializado em validar documentos de LRCO (Livro de Registro de Classe Online) para o Estágio Probatório de professores no Paraná.
 
@@ -34,11 +24,9 @@ Analise o texto abaixo e verifique os seguintes critérios:
    - Resolução 3.037/2024 - GS/SEED
    - Resolução 7.342/2024 - GS/SEED
    - Menção à progressão de ano (1º→2º ou 2º→3º)
-   - Texto sobre matrícula e frequência mínima
 
 2. **Objetivos de Conteúdo**: 
    - Registros de encontros/aulas devem conter objetivos de aprendizagem
-   - Verifique se há descrição de objetivos pedagógicos
 
 3. **Frequências**: 
    - Conte o número TOTAL de DATAS/REGISTROS únicos no documento
@@ -65,30 +53,45 @@ Retorne APENAS um objeto JSON válido com o seguinte formato (sem texto adiciona
 }
 
 TEXTO DO PDF:
-${extractedText.substring(0, 15000)}`;  // Limita a 15k caracteres para evitar exceder limite
+${extractedText.substring(0, 15000)}`;
 
-        const completion = await groq.chat.completions.create({
-            messages: [{ role: 'user', content: prompt }],
-            model: 'llama-3.1-70b-versatile', // Modelo mais recente e poderoso
-            temperature: 0.1, // Baixa temperatura para respostas consistentes
-            response_format: { type: 'json_object' }
+        console.log('[Groq] Enviando requisição via fetch...');
+
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'llama-3.1-70b-versatile',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.1,
+                response_format: { type: 'json_object' }
+            })
         });
 
-        const result = JSON.parse(completion.choices[0].message.content);
-        console.log('Análise concluída:', result);
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+        }
+
+        console.log('[Groq] Resposta recebida');
+        const data = await response.json();
+        const result = JSON.parse(data.choices[0].message.content);
+        console.log('[Groq] Análise concluída:', result);
 
         return result;
 
     } catch (error) {
-        console.error('Erro ao analisar com Groq:', error);
+        console.error('[Groq] Erro:', error);
 
-        // Mensagens de erro mais específicas
         if (error.message?.includes('API key') || error.message?.includes('401')) {
             throw new Error('Chave API Groq inválida. Verifique se copiou corretamente.');
         }
 
         if (error.message?.includes('429')) {
-            throw new Error('Limite de requisições excedido. Aguarde alguns segundos e tente novamente.');
+            throw new Error('Limite de requisições excedido. Aguarde alguns segundos.');
         }
 
         throw new Error(`Falha na análise: ${error.message}`);

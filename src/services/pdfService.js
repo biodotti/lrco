@@ -8,67 +8,58 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 
 /**
  * Extrai texto completo de um PDF usando PDF.js
- * @param {File} pdfFile - Arquivo PDF para processar
- * @returns {Promise<string>} Texto extraído do PDF
  */
 export async function extractTextFromPDF(pdfFile) {
     try {
-        console.log(`Processando PDF: ${pdfFile.name}, tamanho: ${(pdfFile.size / 1024).toFixed(2)} KB`);
+        console.log(`[PDF] Processando: ${pdfFile.name}`);
 
-        // Converte arquivo para ArrayBuffer
         const arrayBuffer = await pdfFile.arrayBuffer();
-
-        // Carrega o PDF
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;
 
-        console.log(`PDF carregado: ${pdf.numPages} páginas`);
+        console.log(`[PDF] ${pdf.numPages} páginas carregadas`);
 
         let fullText = '';
 
-        // Processa cada página
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
             const page = await pdf.getPage(pageNum);
             const textContent = await page.getTextContent();
-
-            // Extrai texto de cada item na página
-            const pageText = textContent.items
-                .map(item => item.str)
-                .join(' ');
-
+            const pageText = textContent.items.map(item => item.str).join(' ');
             fullText += `\n\n--- Página ${pageNum} ---\n${pageText}`;
         }
 
-        console.log(`Texto extraído com sucesso: ${fullText.length} caracteres`);
+        console.log(`[PDF] Texto extraído: ${fullText.length} caracteres`);
         return fullText;
 
     } catch (error) {
-        console.error('Erro ao extrair texto do PDF:', error);
+        console.error('[PDF] Erro:', error);
         throw new Error(`Falha ao processar ${pdfFile.name}: ${error.message}`);
     }
 }
 
 /**
  * Processa múltiplos PDFs sequencialmente
- * @param {File[]} pdfFiles - Array de arquivos PDF
- * @param {Function} onProgress - Callback de progresso (index, total, fileName)
- * @returns {Promise<Array<{file: File, text: string}>>} Array com arquivos e textos extraídos
  */
 export async function processPDFBatch(pdfFiles, onProgress) {
     const results = [];
 
+    console.log(`[Batch] Iniciando ${pdfFiles.length} PDFs`);
+
     for (let i = 0; i < pdfFiles.length; i++) {
         const file = pdfFiles[i];
 
-        // Atualiza progresso
+        console.log(`[Batch] ${i + 1}/${pdfFiles.length}: ${file.name}`);
+
         if (onProgress) {
             onProgress(i, pdfFiles.length, file.name);
         }
 
-        // Extrai texto
         const text = await extractTextFromPDF(file);
         results.push({ file, text });
+
+        console.log(`[Batch] ${i + 1}/${pdfFiles.length} concluído`);
     }
 
+    console.log(`[Batch] Todos os PDFs processados`);
     return results;
 }
