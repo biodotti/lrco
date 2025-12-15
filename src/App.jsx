@@ -4,11 +4,9 @@ import ApiKeyInput from './components/ApiKeyInput';
 import FileUploader from './components/FileUploader';
 import ProgressIndicator from './components/ProgressIndicator';
 import ValidationResults from './components/ValidationResults';
-import { initializeGemini, processPDFBatch } from './services/geminiService';
+import { processPDFBatch } from './services/pdfService';
+import { initializeGroq, analyzeTextWithGroq } from './services/groqService';
 import {
-    validateRegistroAvaliacao,
-    validateObjetivosConteudo,
-    validateFrequencias,
     determineDecision,
     extractRessalvas
 } from './services/validationService';
@@ -34,7 +32,7 @@ function App() {
     const handleValidation = async () => {
         // Validações iniciais
         if (!apiKey || apiKey.trim() === '') {
-            setError('Por favor, insira sua chave API Gemini');
+            setError('Por favor, insira sua chave API Groq');
             return;
         }
 
@@ -48,28 +46,20 @@ function App() {
         setProgress({ current: 0, total: files.length, currentFile: '' });
 
         try {
-            // 1. Inicializa Gemini
-            const model = initializeGemini(apiKey);
+            // 1. Inicializa Groq
+            const groq = initializeGroq(apiKey);
 
-            // 2. Processa PDFs e extrai texto
+            // 2. Extrai texto dos PDFs com PDF.js
             const updateProgress = (current, total, fileName) => {
                 setProgress({ current, total, currentFile: fileName });
             };
 
-            const extractedData = await processPDFBatch(model, files, updateProgress);
+            const extractedData = await processPDFBatch(files, updateProgress);
 
-            // 3. Valida cada PDF
-            const validationResults = extractedData.map(({ file, text }) => {
-                // Executa as três validações
-                const registroAvaliacao = validateRegistroAvaliacao(text);
-                const objetivosConteudo = validateObjetivosConteudo(text);
-                const frequencias = validateFrequencias(text);
-
-                const validations = {
-                    registroAvaliacao,
-                    objetivosConteudo,
-                    frequencias
-                };
+            // 3. Analisa cada PDF com Groq
+            const validationPromises = extractedData.map(async ({ file, text }) => {
+                // Groq analisa tudo de uma vez
+                const validations = await analyzeTextWithGroq(groq, text);
 
                 // Determina decisão final
                 const decision = determineDecision(validations);
@@ -84,6 +74,9 @@ function App() {
                     ressalvas
                 };
             });
+
+            // Aguarda todas as análises
+            const validationResults = await Promise.all(validationPromises);
 
             // Atualiza progresso final
             setProgress({ current: files.length, total: files.length, currentFile: '' });

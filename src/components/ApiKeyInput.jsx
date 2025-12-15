@@ -3,14 +3,14 @@ import { Key, Eye, EyeOff } from 'lucide-react';
 
 export default function ApiKeyInput({ onApiKeyChange, isProcessing }) {
     const [apiKey, setApiKey] = useState(() => {
-        return sessionStorage.getItem('gemini_api_key') || '';
+        return sessionStorage.getItem('groq_api_key') || '';
     });
     const [showKey, setShowKey] = useState(false);
 
     const handleChange = (e) => {
         const newKey = e.target.value;
         setApiKey(newKey);
-        sessionStorage.setItem('gemini_api_key', newKey);
+        sessionStorage.setItem('groq_api_key', newKey);
         onApiKeyChange(newKey);
     };
 
@@ -22,12 +22,12 @@ export default function ApiKeyInput({ onApiKeyChange, isProcessing }) {
         <div className="card fade-in">
             <h2 style={{ marginBottom: '1.5rem', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Key size={24} />
-                Chave API Gemini
+                Chave API Groq
             </h2>
 
             <div className="input-group" style={{ marginBottom: 0 }}>
                 <label htmlFor="api-key">
-                    Insira sua chave API do Google Gemini
+                    Insira sua chave API da Groq
                 </label>
                 <div style={{ position: 'relative' }}>
                     <input
@@ -36,7 +36,7 @@ export default function ApiKeyInput({ onApiKeyChange, isProcessing }) {
                         className="input-field"
                         value={apiKey}
                         onChange={handleChange}
-                        placeholder="AIza..."
+                        placeholder="gsk_..."
                         disabled={isProcessing}
                         style={{ paddingRight: '3rem' }}
                     />
@@ -64,7 +64,7 @@ export default function ApiKeyInput({ onApiKeyChange, isProcessing }) {
                 <p style={{ fontSize: '0.875rem', color: 'var(--color-text-light)', marginTop: '0.5rem' }}>
                     Sua chave é armazenada apenas nesta sessão do navegador.{' '}
                     <a
-                        href="https://aistudio.google.com/app/apikey"
+                        href="https://console.groq.com/keys"
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}
