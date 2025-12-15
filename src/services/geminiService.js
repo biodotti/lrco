@@ -90,11 +90,12 @@ NÃO resuma, NÃO omita nada. Extraia TUDO.`;
 }
 
 /**
- * Processa múltiplos PDFs com controle de concorrência
+ * Processa múltiplos PDFs com controle de concorrência e delay
  */
 export async function processPDFBatch(model, pdfFiles, onProgress) {
     const results = [];
-    const CONCURRENT_LIMIT = 3; // Processa 3 PDFs por vez
+    const CONCURRENT_LIMIT = 1; // Processa 1 PDF por vez para evitar rate limit
+    const DELAY_MS = 3000; // 3 segundos de delay entre cada PDF
 
     for (let i = 0; i < pdfFiles.length; i += CONCURRENT_LIMIT) {
         const batch = pdfFiles.slice(i, i + CONCURRENT_LIMIT);
@@ -113,6 +114,11 @@ export async function processPDFBatch(model, pdfFiles, onProgress) {
 
         const batchResults = await Promise.all(batchPromises);
         results.push(...batchResults);
+
+        // Adiciona delay entre batches (exceto no último)
+        if (i + CONCURRENT_LIMIT < pdfFiles.length) {
+            await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+        }
     }
 
     return results;
