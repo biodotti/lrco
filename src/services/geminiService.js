@@ -9,9 +9,9 @@ export function initializeGemini(apiKey) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Usar modelo Pro com suporte a PDF
+    // Usar Gemini 2.0 Flash Experimental (modelo disponível na API do usuário)
     return genAI.getGenerativeModel({
-        model: "gemini-1.5-pro"
+        model: "gemini-2.0-flash-exp"
     });
 }
 
@@ -55,13 +55,13 @@ NÃO resuma, NÃO omita nada. Extraia TUDO.`;
 
         // Envia para Gemini
         const result = await model.generateContent([
+            prompt,
             {
                 inlineData: {
                     mimeType: 'application/pdf',
                     data: base64Data
                 }
-            },
-            prompt
+            }
         ]);
 
         const response = await result.response;
@@ -82,7 +82,7 @@ NÃO resuma, NÃO omita nada. Extraia TUDO.`;
             throw new Error('Erro de conexão com a API. Verifique sua conexão com a internet.');
         }
         if (error.message?.includes('model not found') || error.message?.includes('404')) {
-            throw new Error('Modelo Gemini 1.5 Pro não encontrado. Verifique se sua chave API tem acesso.');
+            throw new Error('Modelo não encontrado. Atualize o pacote: npm install @google/generative-ai@latest');
         }
 
         throw new Error(`Falha ao processar ${pdfFile.name}: ${error.message}`);
