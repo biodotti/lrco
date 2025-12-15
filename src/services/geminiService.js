@@ -9,8 +9,9 @@ export function initializeGemini(apiKey) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
+    // Usar modelo estável com suporte a PDF
     return genAI.getGenerativeModel({
-        model: "gemini-2.0-flash-exp"
+        model: "gemini-1.5-flash"
     });
 }
 
@@ -69,6 +70,21 @@ NÃO resuma, NÃO omita nada. Extraia TUDO.`;
         return text;
     } catch (error) {
         console.error('Erro ao extrair texto do PDF:', error);
+
+        // Mensagens de erro mais específicas
+        if (error.message?.includes('API key') || error.message?.includes('API_KEY_INVALID')) {
+            throw new Error('Chave API inválida. Verifique se copiou corretamente do Google AI Studio.');
+        }
+        if (error.message?.includes('quota') || error.message?.includes('429')) {
+            throw new Error('Limite de requisições excedido. Aguarde alguns minutos e tente novamente.');
+        }
+        if (error.message?.includes('CORS') || error.message?.includes('fetch')) {
+            throw new Error('Erro de conexão com a API. Verifique sua conexão com a internet.');
+        }
+        if (error.message?.includes('model not found') || error.message?.includes('404')) {
+            throw new Error('Modelo não encontrado. Verifique se sua chave API tem acesso ao Gemini 1.5 Flash.');
+        }
+
         throw new Error(`Falha ao processar ${pdfFile.name}: ${error.message}`);
     }
 }
