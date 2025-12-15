@@ -9,7 +9,6 @@ export function initializeGemini(apiKey) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Usar Gemini 2.0 Flash Experimental (modelo disponível na API do usuário)
     return genAI.getGenerativeModel({
         model: "gemini-2.0-flash-exp"
     });
@@ -35,57 +34,74 @@ async function fileToBase64(file) {
  */
 export async function extractTextFromPDF(model, pdfFile) {
     try {
+        console.log(`Processando PDF: ${pdfFile.name}, tamanho: ${(pdfFile.size / 1024).toFixed(2)} KB`);
+
         // Converte PDF para base64
         const base64Data = await fileToBase64(pdfFile);
+        console.log(`PDF convertido para base64, tamanho: ${base64Data.length} caracteres`);
 
-        // Prompt para extração estruturada
-        const prompt = `Extraia TODO o texto deste PDF de forma estruturada e completa.
+        // Prompt simplificado para teste
+        const prompt = `Extraia TODO o texto deste PDF. Preserve a estrutura original e não omita nada.`;
 
-IMPORTANTE: Preserve EXATAMENTE como aparecem no documento:
-- Todos os títulos e seções
-- Todas as datas e horários
-- Todas as listas e tabelas
-- TODOS os registros de frequência (cada um deles)
-- Todos os registros de conteúdo/encontros
-- Todas as resoluções e números de documentos oficiais
-- Todo o texto de avaliação e parecer final
-
-Retorne o texto completo extraído, preservando a estrutura original.
-NÃO resuma, NÃO omita nada. Extraia TUDO.`;
+        console.log('Enviando requisição para Gemini API...');
 
         // Envia para Gemini
         const result = await model.generateContent([
-            prompt,
             {
                 inlineData: {
                     mimeType: 'application/pdf',
                     data: base64Data
                 }
-            }
+            },
+            prompt
         ]);
 
+        console.log('Resposta recebida da API');
         const response = await result.response;
         const text = response.text();
 
+        console.log(`Texto extraído com sucesso, ${text.length} caracteres`);
         return text;
+
     } catch (error) {
-        console.error('Erro ao extrair texto do PDF:', error);
+        console.error('ERRO DETALHADO:', {
+            message: error.message,
+            status: error.status,
+            statusText: error.statusText,
+            errorDetails: error
+        });
+
+        // Log do erro completo para debug
+        console.error('Erro completo:', JSON.stringify(error, null, 2));
 
         // Mensagens de erro mais específicas
         if (error.message?.includes('API key') || error.message?.includes('API_KEY_INVALID')) {
             throw new Error('Chave API inválida. Verifique se copiou corretamente do Google AI Studio.');
         }
-        if (error.message?.includes('quota') || error.message?.includes('429')) {
-            throw new Error('Limite de requisições excedido. Aguarde alguns minutos e tente novamente.');
+
+        // Verificar se é realmente 429 ou outro código
+        if (error.status === 429 || error.message?.includes('429')) {
+            throw new Error(`Rate limit (429): ${error.message}. Sua conta pode ter atingido o limite diário ou por minuto.`);
         }
+
+        if (error.status === 400) {
+            throw new Error(`Requisição inválida (400): ${error.message}. O PDF pode estar corrompido ou muito grande.`);
+        }
+
+        if (error.status === 403) {
+            throw new Error(`Acesso negado (403): ${error.message}. Sua chave API pode não ter permissão para este modelo.`);
+        }
+
         if (error.message?.includes('CORS') || error.message?.includes('fetch')) {
             throw new Error('Erro de conexão com a API. Verifique sua conexão com a internet.');
         }
+
         if (error.message?.includes('model not found') || error.message?.includes('404')) {
-            throw new Error('Modelo não encontrado. Atualize o pacote: npm install @google/generative-ai@latest');
+            throw new Error('Modelo não encontrado (404). Sua chave pode não ter acesso ao gemini-2.0-flash-exp.');
         }
 
-        throw new Error(`Falha ao processar ${pdfFile.name}: ${error.message}`);
+        // Erro genérico com mais detalhes
+        throw new Error(`Falha ao processar ${pdfFile.name}: [${error.status || 'UNKNOWN'}] ${error.message}`);
     }
 }
 
@@ -94,8 +110,8 @@ NÃO resuma, NÃO omita nada. Extraia TUDO.`;
  */
 export async function processPDFBatch(model, pdfFiles, onProgress) {
     const results = [];
-    const CONCURRENT_LIMIT = 1; // Processa 1 PDF por vez para evitar rate limit
-    const DELAY_MS = 3000; // 3 segundos de delay entre cada PDF
+    const CONCURRENT_LIMIT = 1;
+    const DELAY_MS = 5000; // 5 segundos de delay
 
     for (let i = 0; i < pdfFiles.length; i += CONCURRENT_LIMIT) {
         const batch = pdfFiles.slice(i, i + CONCURRENT_LIMIT);
@@ -103,7 +119,6 @@ export async function processPDFBatch(model, pdfFiles, onProgress) {
         const batchPromises = batch.map(async (file, batchIndex) => {
             const globalIndex = i + batchIndex;
 
-            // Atualiza progresso
             if (onProgress) {
                 onProgress(globalIndex, pdfFiles.length, file.name);
             }
@@ -115,8 +130,9 @@ export async function processPDFBatch(model, pdfFiles, onProgress) {
         const batchResults = await Promise.all(batchPromises);
         results.push(...batchResults);
 
-        // Adiciona delay entre batches (exceto no último)
+        // Delay entre PDFs
         if (i + CONCURRENT_LIMIT < pdfFiles.length) {
+            console.log(`Aguardando ${DELAY_MS / 1000} segundos antes do próximo PDF...`);
             await new Promise(resolve => setTimeout(resolve, DELAY_MS));
         }
     }
